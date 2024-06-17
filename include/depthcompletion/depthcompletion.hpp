@@ -18,6 +18,8 @@ using FloatPrecision = std::conditional_t<DATATYPE == nvinfer1::DataType::kHALF,
 class DepthCompletionEngine {
 public:
     DepthCompletionEngine();
+    DepthCompletionEngine(const std::string &engine_file_path, int batch_size, 
+                          int input_height, int input_width, int input_channels);
     ~DepthCompletionEngine();
 
     void init(const std::string &engine_file_path, int batch_size, 
@@ -59,6 +61,11 @@ private:
 
 // Constructor: Initializes normalization parameters
 DepthCompletionEngine::DepthCompletionEngine() = default;
+
+DepthCompletionEngine::DepthCompletionEngine(const std::string &engine_file_path, int batch_size, 
+                                             int input_height, int input_width, int input_channels) {
+    init(engine_file_path, batch_size, input_height, input_width, input_channels);
+}
 
 // Destructor: Releases TensorRT and GPU resources
 DepthCompletionEngine::~DepthCompletionEngine() {
