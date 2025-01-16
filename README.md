@@ -32,17 +32,20 @@ cd ~/ros_ws/src
 ```
 
 ### 2. Clone and Build the Package
-Build the workspace using `colcon`:
+Clone the workspace:
 ```
 git clone https://github.com/AlessandroSaviolo/realsense-cpp
 ```
 ```
 git clone https://github.com/AlessandroSaviolo/depthcompletion
 ```
-Source the workspace:
+Build the workspace using `colcon`:
 ```
 cd ~/ros_ws
 colcon build --symlink-install
+```
+Source the workspace:
+```
 source install/local_setup.bash
 ```
 
