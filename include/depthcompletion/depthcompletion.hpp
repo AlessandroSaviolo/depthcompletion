@@ -23,10 +23,10 @@
 static const nvinfer1::DataType DATATYPE = nvinfer1::DataType::kHALF;
 typedef std::conditional<DATATYPE == nvinfer1::DataType::kHALF, __half, float>::type FloatPrecision;
 
-class MDEEngine {
+class DepthCompletionEngine {
 public:
-    explicit MDEEngine();
-    ~MDEEngine();
+    explicit DepthCompletionEngine();
+    ~DepthCompletionEngine();
 
     void init(const std::string& engine_file_path, const int batch_size, 
               const int input_height, const int input_width, const int input_channels);
@@ -62,11 +62,11 @@ private:
     cv::Mat _imagenet_std_mat;
 };
 
-MDEEngine::MDEEngine()
+DepthCompletionEngine::DepthCompletionEngine()
     : _imagenet_mean(0.485, 0.456, 0.406),
       _imagenet_std(0.229, 0.224, 0.225) {}
 
-MDEEngine::~MDEEngine() {
+DepthCompletionEngine::~DepthCompletionEngine() {
     if (_context) {_context->destroy();}
     if (_engine)  {_engine->destroy();}
     if (_runtime) {_runtime->destroy();}
@@ -74,7 +74,7 @@ MDEEngine::~MDEEngine() {
     for (auto& ptr : _gpu_ptrs) {CHECK_CUDA(cudaFree(ptr));}
 }
 
-void MDEEngine::init(const std::string& engine_file_path, const int batch_size, 
+void DepthCompletionEngine::init(const std::string& engine_file_path, const int batch_size, 
                      const int input_height, const int input_width, const int input_channels) {
 
     std::cout << "Loading engine from file: " << engine_file_path << std::endl;
@@ -176,7 +176,7 @@ void MDEEngine::init(const std::string& engine_file_path, const int batch_size,
     _imagenet_std_mat  = cv::Mat(input_size, CV_32FC3, _imagenet_std);
 }
 
-cv::Mat MDEEngine::predict(cv::Mat &frame) {
+cv::Mat DepthCompletionEngine::predict(cv::Mat &frame) {
 
     // Allocate CPU memory for input and output
     __half* input   = new __half[_input_size]();
