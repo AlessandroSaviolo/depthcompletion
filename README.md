@@ -4,18 +4,18 @@ A lightweight and efficient library for enhancing noisy or incomplete depth data
 
 ## Motivation
 
-While developing a framework for reactive collision avoidance in agile navigation, I encountered significant limitations with raw depth data from RGB-D sensors. The data was often noisy, incomplete, and lacked sufficient range, especially in cluttered and dynamic environments. I addressed these limitations by integrating monocular depth estimation with a depth completion pipeline, achieving accurate, dense, and extended depth maps.
+During the development of a reactive collision avoidance framework for agile navigation, we encountered significant challenges with raw depth data from RGB-D sensors. This data was often noisy, incomplete, and lacked sufficient range, particularly in cluttered and dynamic environments. To overcome these limitations, we integrated monocular depth estimation with a depth completion pipeline, enabling the creation of accurate, dense, and extended depth maps that significantly improved perception capabilities.
 
 ## How it works
 
-In our approach to depth completion, we use an RGB-D sensor, which provides two inputs: a standard RGB image and a sparse depth map. The RGB image captures the visual scene, while the sparse depth map contains distance measurements to objects. However, due to sensor limitations, the depth map often has gaps or noise, particularly around reflective surfaces or edges.
+Our depth completion approach begins with input from an RGB-D sensor, which provides two data streams: an RGB image capturing the visual scene and a sparse depth map containing distance measurements. However, due to sensor limitations, the depth map often has gaps and noise, particularly near reflective surfaces or object edges.
 
-To address this, we use a monocular depth estimation network to predict a relative depth map from the RGB image. This network generates a dense depth map that fills in the missing areas, but the predicted depths are not in absolute metric units. To align the predicted relative depth with the sparse absolute depth from the sensor, we fit a second-order polynomial model. This alignment minimizes the error between the sensor’s depth values and the predictions for regions where both are valid, ensuring the predictions are adjusted to the correct scale.
+To address these issues, we use a monocular depth estimation network to generate a relative depth map from the RGB image. This network produces a dense depth map that fills in the missing regions. However, these predicted depths are relative and not in absolute metric units. To align the predicted depth map with the sparse absolute depth from the sensor, we apply a second-order polynomial model. This model minimizes the error between the predicted depth and sensor data in regions where both are valid, ensuring the predictions are correctly scaled.
 
-Once the alignment is complete, we use the polynomial model to refine the entire predicted depth map, transforming it into a completed absolute depth map. This process corrects inaccuracies, fills in gaps, and combines the strengths of the sensor data (absolute accuracy) with the network’s ability to generalize across the entire scene. The result is a dense, high-quality depth map that extends beyond the raw sensor’s capabilities.
+The aligned depth map is then refined using the polynomial model, resulting in a completed absolute depth map. This map combines the sensor's accurate absolute data with the network's ability to generalize across the scene, filling in gaps and extending the depth range. The result is a dense, high-quality depth map that significantly enhances perception for robotics tasks such as obstacle detection, planning, and navigation.
 
 ## Features
-- Combines raw RGB-D depth maps with outputs from monocular depth estimation networks.
+- Combines raw RGB-D depth maps with monocular depth estimation outputs for enhanced depth accuracy.
 - Optimized for fast inference, enabling use on lightweight robotics platforms.
 - Easily adaptable to different environments and sensor setups.
 - A basic ROS2 nodelet is included as an example and for testing purposes.
@@ -24,21 +24,21 @@ Once the alignment is complete, we use the polynomial model to refine the entire
 
 ## Installation
 
-Follow [`install_dependencies.md`](https://github.com/AlessandroSaviolo/depthcompletion/blob/main/install_dependencies.md) to install dependencies (PyTorch, TensorRT).
+To install dependencies (e.g., PyTorch, TensorRT), follow the instructions in [`install_dependencies.md`](https://github.com/AlessandroSaviolo/depthcompletion/blob/main/install_dependencies.md).
 
 ---
 
 ## ROS2 Testing
-> **Note:** ROS2 is not required to use this library. If you do not need ROS2 integration, you can remove ROS2 dependencies.
+> **Note:** ROS2 is optional. If ROS2 integration is not required, you can remove ROS2 dependencies and use the library independently.
 
 ### 1. Create a Workspace
-```bash
+```
 mkdir -p ~/ros_ws/src
 cd ~/ros_ws/src
 ```
 
 ### 2. Clone and Build the Package
-Clone the workspace:
+Clone the repositories:
 ```
 git clone https://github.com/AlessandroSaviolo/realsense-cpp
 ```
@@ -68,7 +68,7 @@ ros2 run rqt_image_view rqt_image_view
 ---
 
 ## Tested Environment
-This code was tested on the following setup:
+This library has been tested in the following setup:
 - **Hardware:** NVIDIA Orin 16GB, Intel RealSense 455
 - **Librealsense Version:** v2.55.1
 - **ROS2 Distribution:** Humble
@@ -76,10 +76,11 @@ This code was tested on the following setup:
 ---
 
 ## Contributing
-Contributions are encouraged! Feel free to submit pull requests to:
+Contributions are welcome! You can:
 - Extend functionality.
 - Improve documentation.
 - Fix bugs or issues.
+Feel free to submit pull requests or open issues.
 
 ---
 
