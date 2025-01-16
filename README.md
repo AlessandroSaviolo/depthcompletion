@@ -1,1 +1,1 @@
-# depthcompletion-cpp
+# Depth Completion C++ Library
