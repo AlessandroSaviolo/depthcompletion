@@ -4,13 +4,11 @@ A lightweight and efficient library for enhancing noisy or incomplete depth data
 
 ## Motivation
 
-In robotics, accurate depth information is crucial for tasks like obstacle avoidance, path planning, and reactive control. However, sensors such as RGB-D cameras often produce noisy, incomplete, or limited-range depth maps due to hardware and environmental limitations. Depth completion bridges this gap by combining sensor data with advanced algorithms to create dense and accurate depth maps.
-
-This library is designed to be simple, efficient, and adaptable to real-world scenarios. It focuses solely on depth completion, providing easy integration into robotics pipelines. Contributions to improve or extend functionality are welcome!
+While developing a framework for reactive collision avoidance in agile navigation, I encountered significant limitations with raw depth data from RGB-D sensors. The data was often noisy, incomplete, and lacked sufficient range, especially in cluttered and dynamic environments. I addressed these limitations by integrating monocular depth estimation with a depth completion pipeline, achieving accurate, dense, and extended depth maps.
 
 ## How it works
 
-In our approach to depth completion, we start by using an RGB-D sensor, which provides two inputs: a standard RGB image and a sparse depth map. The RGB image captures the visual scene, while the sparse depth map contains distance measurements to objects. However, due to sensor limitations, the depth map often has gaps or noise, particularly around reflective surfaces or edges.
+In our approach to depth completion, we use an RGB-D sensor, which provides two inputs: a standard RGB image and a sparse depth map. The RGB image captures the visual scene, while the sparse depth map contains distance measurements to objects. However, due to sensor limitations, the depth map often has gaps or noise, particularly around reflective surfaces or edges.
 
 To address this, we use a monocular depth estimation network to predict a relative depth map from the RGB image. This network generates a dense depth map that fills in the missing areas, but the predicted depths are not in absolute metric units. To align the predicted relative depth with the sparse absolute depth from the sensor, we fit a second-order polynomial model. This alignment minimizes the error between the sensor’s depth values and the predictions for regions where both are valid, ensuring the predictions are adjusted to the correct scale.
 
