@@ -3,80 +3,80 @@
 #include "NvInfer.h"
 #include "NvInferPlugin.h"
 #include <cuda_fp16.h>
+#include <opencv2/opencv.hpp>
 #include <fstream>
+#include <vector>
 
 #include "common.hpp"
 #include "half.hpp"
 
-#ifdef QUADROTOR_NU
-    #define SAVED_QUADROTOR_NU QUADROTOR_NU
-    #undef QUADROTOR_NU
-#endif
-
-#include <opencv2/opencv.hpp>
-
-#ifdef SAVED_QUADROTOR_NU
-    #define QUADROTOR_NU SAVED_QUADROTOR_NU
-    #undef SAVED_QUADROTOR_NU
-#endif
-
+// Static configuration for data precision
 static const nvinfer1::DataType DATATYPE = nvinfer1::DataType::kHALF;
-typedef std::conditional<DATATYPE == nvinfer1::DataType::kHALF, __half, float>::type FloatPrecision;
+using FloatPrecision = std::conditional_t<DATATYPE == nvinfer1::DataType::kHALF, __half, float>;
 
+// DepthCompletionEngine: Responsible for loading the TensorRT engine and running inference
 class DepthCompletionEngine {
 public:
-    explicit DepthCompletionEngine();
+    DepthCompletionEngine();
     ~DepthCompletionEngine();
 
-    void init(const std::string& engine_file_path, const int batch_size, 
-              const int input_height, const int input_width, const int input_channels);
+    void init(const std::string &engine_file_path, int batch_size, 
+              int input_height, int input_width, int input_channels);
     cv::Mat predict(cv::Mat &frame);
 
 private:
-    int _num_bindings;
-    int _num_inputs = 0;
-    int _num_outputs = 0;
-    std::vector<Binding> _input_bindings;
-    std::vector<Binding> _output_bindings;
-    std::vector<void*> _gpu_ptrs;
+    // TensorRT objects
+    nvinfer1::ICudaEngine *_engine = nullptr;
+    nvinfer1::IRuntime *_runtime = nullptr;
+    nvinfer1::IExecutionContext *_context = nullptr;
 
-    nvinfer1::ICudaEngine* _engine  = nullptr;
-    nvinfer1::IRuntime* _runtime = nullptr;
-    nvinfer1::IExecutionContext* _context = nullptr;
-    cudaStream_t _stream  = nullptr;
+    // CUDA stream
+    cudaStream_t _stream = nullptr;
+
+    // Logger for TensorRT
     Logger _gLogger{nvinfer1::ILogger::Severity::kERROR};
 
-    int _batch_size;
-    int _input_height;
-    int _input_width;
-    int _input_channels;
-    int _output_height;
-    int _output_width;
-    int _output_channels;
-    size_t _input_size;
-    size_t _output_size;
+    // Binding information
+    std::vector<Binding> _input_bindings;
+    std::vector<Binding> _output_bindings;
+    std::vector<void *> _gpu_ptrs;
 
-    cv::Scalar _imagenet_mean;
-    cv::Scalar _imagenet_std;
-    cv::Mat _imagenet_mean_mat;
-    cv::Mat _imagenet_std_mat;
+    int _num_bindings = 0;
+    int _num_inputs = 0;
+    int _num_outputs = 0;
+
+    // Input/output sizes and dimensions
+    int _batch_size = 0;
+    int _input_height = 0, _input_width = 0, _input_channels = 0;
+    int _output_height = 0, _output_width = 0, _output_channels = 0;
+    size_t _input_size = 0, _output_size = 0;
+
+    // Normalization parameters
+    cv::Scalar _imagenet_mean{0.485, 0.456, 0.406};
+    cv::Scalar _imagenet_std{0.229, 0.224, 0.225};
+    cv::Mat _imagenet_mean_mat, _imagenet_std_mat;
 };
 
-DepthCompletionEngine::DepthCompletionEngine()
-    : _imagenet_mean(0.485, 0.456, 0.406),
-      _imagenet_std(0.229, 0.224, 0.225) {}
+// Constructor: Initializes normalization parameters
+DepthCompletionEngine::DepthCompletionEngine() = default;
 
+// Destructor: Releases TensorRT and GPU resources
 DepthCompletionEngine::~DepthCompletionEngine() {
-    if (_context) {_context->destroy();}
-    if (_engine)  {_engine->destroy();}
-    if (_runtime) {_runtime->destroy();}
-    if (_stream)  {cudaStreamDestroy(_stream);}
-    for (auto& ptr : _gpu_ptrs) {CHECK_CUDA(cudaFree(ptr));}
+    if (_context) _context->destroy();
+    if (_engine) _engine->destroy();
+    if (_runtime) _runtime->destroy();
+    if (_stream) cudaStreamDestroy(_stream);
+
+    for (auto &ptr : _gpu_ptrs) {
+        CHECK_CUDA(cudaFree(ptr));
+    }
 }
 
+// Initialize the TensorRT engine
 void DepthCompletionEngine::init(const std::string& engine_file_path, const int batch_size, 
                      const int input_height, const int input_width, const int input_channels) {
 
+    // Load engine file into memory
     std::cout << "Loading engine from file: " << engine_file_path << std::endl;
     std::ifstream file(engine_file_path, std::ios::binary);
     assert(file.good());
@@ -110,6 +110,7 @@ void DepthCompletionEngine::init(const std::string& engine_file_path, const int 
     std::cout << "Creating CUDA stream..." << std::endl;
     CHECK_CUDA(cudaStreamCreate(&_stream));
 
+    // Process bindings
     _num_bindings = _engine->getNbBindings();
     std::cout << "Number of bindings: " << _num_bindings << std::endl;
 
@@ -176,6 +177,7 @@ void DepthCompletionEngine::init(const std::string& engine_file_path, const int 
     _imagenet_std_mat  = cv::Mat(input_size, CV_32FC3, _imagenet_std);
 }
 
+// Run inference on a given frame
 cv::Mat DepthCompletionEngine::predict(cv::Mat &frame) {
 
     // Allocate CPU memory for input and output
@@ -209,5 +211,5 @@ cv::Mat DepthCompletionEngine::predict(cv::Mat &frame) {
     delete[] input;
     delete[] output;
 
-    return result;
+    return result.clone();  // Clone to ensure valid memory after cleanup
 }

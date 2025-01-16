@@ -1,142 +1,182 @@
-#include <depthcompletion/depthcompletion.hpp>
 #include <realsense_camera/camera.hpp>
+#include <depthcompletion/depthcompletion.hpp>
 
-#include <torch/torch.h>
-
-#include <Eigen/Geometry>
-#include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
 #include <opencv2/core/core.hpp>
 #include <cv_bridge/cv_bridge.h>
 
 #include <rclcpp/rclcpp.hpp>
 #include <rclcpp_components/register_node_macro.hpp>
-#include <nav_msgs/msg/odometry.hpp>
 #include <sensor_msgs/msg/image.hpp>
-#include <sensor_msgs/msg/point_cloud2.hpp>
-#include <sensor_msgs/point_cloud2_iterator.hpp>
-#include <std_msgs/msg/empty.hpp>
-#include <std_msgs/msg/float64_multi_array.hpp>
 
 namespace depthcompletion {
 
 class DepthCompletionNodelet : public rclcpp::Node {
 public:
     explicit DepthCompletionNodelet(const rclcpp::NodeOptions &options)
-        : Node("depthcompletion", options), _clock(RCL_ROS_TIME) {
+        : Node("depth_completion", options), _clock(RCL_ROS_TIME) {
 
-        declareAndGetParameters();
+        // Initialize all components
+        declareParameters();
+        validateAndLoadParameters();
         initializeEngine();
         initializeCamera();
-        initializePublishers();
-        startFrameTimer();
+        setupPublishers();
+        startTimer();
     }
 
 private:
-    template <typename T>
-    void loadParameter(const std::string &param_name, T &param_value, const std::string &format) {
-        if (!this->get_parameter(param_name, param_value))
-            RCLCPP_ERROR(this->get_logger(), "[DepthCompletion] No %s!", param_name.c_str());
-        else {
-            if constexpr (std::is_same_v<T, std::string>)
-                RCLCPP_INFO(this->get_logger(), "[DepthCompletion] %s: %s", param_name.c_str(), param_value.c_str());
-            else
-                RCLCPP_INFO(this->get_logger(), ("[DepthCompletion] " + param_name + ": " + format).c_str(), param_value);
-        }
+    void declareParameters() {
+        // Declare parameters with default values
+        this->declare_parameter<std::string>("workspace_path", "");
+        this->declare_parameter<std::string>("engine.relative_path", "");
+        this->declare_parameter<int>("engine.width", 0);
+        this->declare_parameter<int>("engine.height", 0);
+        this->declare_parameter<int>("engine.batchsize", 0);
+        this->declare_parameter<std::string>("camera.frame_id", "");
+        this->declare_parameter<int>("camera.width", 0);
+        this->declare_parameter<int>("camera.height", 0);
+        this->declare_parameter<int>("camera.channels", 0);
+        this->declare_parameter<int>("camera.fps", 0);
+        this->declare_parameter<double>("camera.min_range", 0.0f);
+        this->declare_parameter<double>("camera.max_range", 0.0f);
+        this->declare_parameter<int>("camera.speckle_max_size", 0);
+        this->declare_parameter<int>("camera.speckle_diff", 0);
     }
-    
-    void declareAndGetParameters() {
-        this->declare_parameter("workspace_path", "");
-        this->declare_parameter("engine.relative_path", "");
-        loadParameter("workspace_path", _ws_path, "%s");
-        loadParameter("engine.relative_path", _engine_path, "%s");
-        _engine_path = _ws_path + _engine_path;
 
-        this->declare_parameter("engine.width", 0);
-        this->declare_parameter("engine.height", 0);
-        this->declare_parameter("engine.batchsize", 0);
-        loadParameter("engine.width", _engine_width, "%d");
-        loadParameter("engine.height", _engine_height, "%d");
-        loadParameter("engine.batchsize", _engine_batchsize, "%d");
+    void validateAndLoadParameters() {
+        // Load and validate workspace and engine parameters
+        if (!get_parameter("workspace_path", _ws_path) || _ws_path.empty()) {
+            RCLCPP_FATAL(this->get_logger(), "Parameter 'workspace_path' is not set or empty.");
+            throw std::runtime_error("Missing required parameter: workspace_path");
+        }
 
-        this->declare_parameter("camera.frame_id", "");
-        this->declare_parameter("camera.width", 0);
-        this->declare_parameter("camera.height", 0);
-        this->declare_parameter("camera.channels", 0);
-        this->declare_parameter("camera.fps", 0);
-        this->declare_parameter("camera.min_range", 0.0);
-        this->declare_parameter("camera.max_range", 0.0);
-        this->declare_parameter("camera.speckle_max_size", 0);
-        this->declare_parameter("camera.speckle_diff", 0);
-        loadParameter("camera.frame_id", _camera_frame_id, "%s");
-        loadParameter("camera.width",  _camera_width, "%d");
-        loadParameter("camera.height", _camera_height, "%d");
-        loadParameter("camera.channels", _camera_channels, "%d");
-        loadParameter("camera.fps", _camera_fps, "%d");
-        loadParameter("camera.min_range", _camera_min_range, "%.4f");
-        loadParameter("camera.max_range", _camera_max_range, "%.4f");
-        loadParameter("camera.speckle_max_size", _speckle_max_size, "%d");
-        loadParameter("camera.speckle_diff", _speckle_diff, "%d");
+        std::string engine_relative_path;
+        if (!get_parameter("engine.relative_path", engine_relative_path) || engine_relative_path.empty()) {
+            RCLCPP_FATAL(this->get_logger(), "Parameter 'engine.relative_path' is not set or empty.");
+            throw std::runtime_error("Missing required parameter: engine.relative_path");
+        }
+        _engine_path = _ws_path + engine_relative_path;
+
+        // Load engine dimensions and batch size
+        loadValidatedParameter("engine.width", _engine_width, 1);
+        loadValidatedParameter("engine.height", _engine_height, 1);
+        loadValidatedParameter("engine.batchsize", _engine_batchsize, 1);
+
+        // Load camera parameters
+        loadValidatedParameter("camera.frame_id", _camera_frame_id);
+        loadValidatedParameter("camera.width", _camera_width, 1);
+        loadValidatedParameter("camera.height", _camera_height, 1);
+        loadValidatedParameter("camera.channels", _camera_channels, 1);
+        loadValidatedParameter("camera.fps", _camera_fps, 1);
+        loadValidatedParameter("camera.min_range", _camera_min_range, 0.0f);
+        loadValidatedParameter("camera.max_range", _camera_max_range, 0.0f);
+        loadValidatedParameter("camera.speckle_max_size", _speckle_max_size, 0);
+        loadValidatedParameter("camera.speckle_diff", _speckle_diff, 0);
+    }
+
+    template <typename T>
+    void loadValidatedParameter(const std::string &param_name, T &param_value, T min_value = T()) {
+        if (!get_parameter(param_name, param_value) || param_value < min_value) {
+            RCLCPP_FATAL(this->get_logger(), "Invalid or missing parameter: %s", param_name.c_str());
+            throw std::runtime_error("Invalid or missing parameter: " + param_name);
+        }
+
+        // Check type at compile-time and handle accordingly
+        if constexpr (std::is_same_v<T, std::string>) {
+            RCLCPP_INFO(this->get_logger(), "%s: %s", param_name.c_str(), param_value.c_str());
+        } else {
+            RCLCPP_INFO(this->get_logger(), "%s: %s", param_name.c_str(), std::to_string(param_value).c_str());
+        }
     }
 
     void initializeEngine() {
-        _mde_engine.init(_engine_path, _engine_batchsize, _engine_height, _engine_width, _camera_channels);
+        try {
+            _mde_engine.init(_engine_path, _engine_batchsize, _engine_height, _engine_width, _camera_channels);
+            RCLCPP_INFO(this->get_logger(), "DepthCompletionEngine initialized successfully.");
+        } catch (const std::exception &e) {
+            RCLCPP_FATAL(this->get_logger(), "Engine initialization failed: %s", e.what());
+            throw;
+        }
     }
 
     void initializeCamera() {
-        _camera.init(_ws_path, _camera_width, _camera_height, _camera_fps);
+        try {
+            _camera.init(_ws_path, _camera_width, _camera_height, _camera_fps);
+            
+            // Fetch camera parameters
+            float camera_norm_width, camera_norm_height, camera_norm_fx, camera_norm_fy, camera_norm_cx, camera_norm_cy;
+            _camera.getNormalizedParameters(
+                camera_norm_width, camera_norm_height, camera_norm_fx, camera_norm_fy, camera_norm_cx, camera_norm_cy);
 
-        float camera_width, camera_height, camera_norm_fx, camera_norm_fy, camera_norm_cx, camera_norm_cy;
-        _camera.getNormalizedParameters(camera_width, camera_height, camera_norm_fx, camera_norm_fy, camera_norm_cx, camera_norm_cy);
-        _camera_fx = camera_norm_fx * _camera_width;
-        _camera_fy = camera_norm_fy * _camera_height;
-        _camera_cx = camera_norm_cx * _camera_width;
-        _camera_cy = camera_norm_cy * _camera_height;
+            _camera_fx = camera_norm_fx * _camera_width;
+            _camera_fy = camera_norm_fy * _camera_height;
+            _camera_cx = camera_norm_cx * _camera_width;
+            _camera_cy = camera_norm_cy * _camera_height;
+
+            RCLCPP_INFO(this->get_logger(), "Camera initialized with focal lengths: fx=%.2f, fy=%.2f", _camera_fx, _camera_fy);
+        } 
+        catch (const std::exception &e) {
+            RCLCPP_FATAL(this->get_logger(), "Failed to initialize RealSense camera: %s", e.what());
+            throw;
+        }
     }
 
-    void initializePublishers() {
-        _pub_color = this->create_publisher<sensor_msgs::msg::Image>("rs_camera/color/image_raw", 1);
-        _pub_depth = this->create_publisher<sensor_msgs::msg::Image>("rs_camera/depth/image_raw", 1);
+    void setupPublishers() {
+        _pub_color = this->create_publisher<sensor_msgs::msg::Image>("camera/color/image_raw", 10);
+        _pub_depth = this->create_publisher<sensor_msgs::msg::Image>("camera/depth/image_raw", 10);
     }
-    
-    void startFrameTimer() {
+
+    void startTimer() {
         _timer = this->create_wall_timer(
             std::chrono::milliseconds(static_cast<int>(1000.0 / _camera_fps)),
-            std::bind(&DepthCompletionNodelet::grabAndCompleteDepth, this));
+            std::bind(&DepthCompletionNodelet::processFrames, this));
     }
 
-    void grabAndCompleteDepth() {
-
-        // Load frames
+    void processFrames() {
         uint64_t timestamp;
         cv::Mat color_image, depth_image;
+
+        // Capture frames
         if (!_camera.grabFrames(color_image, depth_image, timestamp)) {
-            RCLCPP_ERROR_THROTTLE(this->get_logger(), _clock, 1000,
-                "[DepthCompletion] Dropped frame longing than RealSense API timeout!");
+            RCLCPP_WARN_THROTTLE(this->get_logger(), _clock, 1000,
+                "Dropped frame due to camera capture timeout.");
             return;
         }
 
-        // Resize frames
+        // Resize images for processing
         cv::resize(color_image, color_image, cv::Size(_engine_width, _engine_height), 0, 0, cv::INTER_LINEAR);
         cv::resize(depth_image, depth_image, cv::Size(_engine_width, _engine_height), 0, 0, cv::INTER_LINEAR);
 
-        // Change unit: mm to m
+        // Convert depth units
         depth_image.convertTo(depth_image, CV_32F, 1.0 / 1000.0);
+
+        // Perform depth completion
+        cv::Mat completed_depth = completeDepth(color_image, depth_image);
+
+        // Publish results
+        publishFrames(color_image, completed_depth);
+    }
+
+    cv::Mat completeDepth(cv::Mat color_image, cv::Mat depth_image) {
+        // Sensor disparity
+        cv::Mat disparity_image;
+        cv::divide(1.0f, depth_image + 1e-3f, disparity_image);
 
         // Filter speckle noise
         cv::Mat depth_image_speckles;
         depth_image.convertTo(depth_image_speckles, CV_16SC1);
         cv::filterSpeckles(depth_image_speckles, -1, _speckle_max_size, _speckle_diff);
 
-        // Sensor disparity
-        cv::Mat disparity_image;
-        cv::divide(1.0f, depth_image + 1e-3f, disparity_image);
-
         // Monocular disparity estimation
         cv::Mat pred_disparity = _mde_engine.predict(color_image);
 
         // Optimize the two clouds together to find the alignment factor
-        cv::Mat mask = (pred_disparity > 0.0f) & (disparity_image < 1000.0f) & (depth_image > _camera_min_range) & (depth_image < _camera_max_range) & (depth_image_speckles != -1);
+        cv::Mat mask = (pred_disparity > 0.0f) & 
+                       (disparity_image < 1000.0f) & 
+                       (depth_image > _camera_min_range) & 
+                       (depth_image < _camera_max_range) & 
+                       (depth_image_speckles != -1);
         cv::Mat masked_pred_disparity, masked_disparity_image;
         pred_disparity.copyTo(masked_pred_disparity, mask);
         disparity_image.copyTo(masked_disparity_image, mask);
@@ -158,24 +198,27 @@ private:
 
         cv::Mat pred_disparity_sq;
         cv::multiply(pred_disparity, pred_disparity, pred_disparity_sq);
-        cv::Mat completed_disparity = pred_disparity_sq * factor.at<float>(2, 0) + pred_disparity * factor.at<float>(1, 0) + factor.at<float>(0, 0);
+        cv::Mat completed_disparity = factor.at<float>(2, 0) * pred_disparity_sq + 
+                                      factor.at<float>(1, 0) * pred_disparity + 
+                                      factor.at<float>(0, 0);
 
         // Disparity to depth
         cv::Mat completed_depth;
         cv::divide(1.0f, completed_disparity + 1e-3f, completed_depth);
 
-        // Publish the depth and color frames
-        cv::Mat normalized_depth;
-        cv::normalize(completed_depth, normalized_depth, 0, 255, cv::NORM_MINMAX, CV_8UC1);
-        sensor_msgs::msg::Image::SharedPtr color_msg = 
-            cv_bridge::CvImage(std_msgs::msg::Header(), sensor_msgs::image_encodings::RGB8, color_image).toImageMsg();
-        sensor_msgs::msg::Image::SharedPtr depth_msg =
-            cv_bridge::CvImage(std_msgs::msg::Header(), sensor_msgs::image_encodings::TYPE_8UC1, normalized_depth).toImageMsg();
-        rclcpp::Time t = _clock.now();
-        color_msg->header.stamp = t;
-        depth_msg->header.stamp = t;
+        return completed_depth;
+    }
+
+    void publishFrames(const cv::Mat &color_image, const cv::Mat &depth_image) {
+        auto color_msg = cv_bridge::CvImage(std_msgs::msg::Header(), "rgb8", color_image).toImageMsg();
+        auto depth_msg = cv_bridge::CvImage(std_msgs::msg::Header(), "32FC1", depth_image).toImageMsg();
+
+        auto timestamp = _clock.now();
+        color_msg->header.stamp = timestamp;
+        depth_msg->header.stamp = timestamp;
         color_msg->header.frame_id = _camera_frame_id;
         depth_msg->header.frame_id = _camera_frame_id;
+
         _pub_color->publish(*color_msg);
         _pub_depth->publish(*depth_msg);
     }
@@ -196,15 +239,12 @@ private:
     int _speckle_max_size;
     int _speckle_diff;
 
-    // Engine instance
+    // Engine and camera instances
     DepthCompletionEngine _mde_engine;
-
-    // Camera instance
     realsense_camera::RSCamera _camera;
-    float _camera_fx;
-    float _camera_fy;
-    float _camera_cx;
-    float _camera_cy;
+
+    // Camera intrinsic parameters
+    float _camera_fx, _camera_fy, _camera_cx, _camera_cy;
 
     // ROS communication
     rclcpp::Clock _clock;

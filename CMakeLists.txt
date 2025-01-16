@@ -14,8 +14,6 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
 set(CUDA_TOOLKIT_ROOT_DIR /usr/local/cuda-11.4)
 set(TensorRT_DIR /usr/share/doc/tensorrt-8.5.2.2)
-set(Torch_PATH $ENV{TORCH_PATH})
-set(Torch_DIR "${Torch_PATH}/share/cmake/Torch")
 
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
@@ -38,7 +36,6 @@ find_package(rosidl_default_generators REQUIRED)
 find_package(pluginlib REQUIRED)
 find_package(realsense_camera REQUIRED)
 find_package(realsense2 REQUIRED)
-find_package(Torch REQUIRED)
 find_library(NVINFER nvinfer)
 find_library(NVINFER_PLUGIN nvinfer_plugin)
 
@@ -46,7 +43,6 @@ set(dependencies
   rclcpp
   geometry_msgs
   nav_msgs
-  quadrotor_msgs
   std_msgs
   sensor_msgs
   visualization_msgs
@@ -87,8 +83,6 @@ include_directories(
   ${TensorRT_INCLUDE_DIRS}
   ${realsense2_INCLUDE_DIR}
   ${CMAKE_SOURCE_DIR}/../realsense-cpp/realsense_camera/include
-  ${Torch_PATH}/include
-  ${Torch_PATH}/include/torch/csrc/api/include
 )
 
 add_library(depth_completion SHARED src/nodelet.cpp)
@@ -104,7 +98,6 @@ target_link_libraries(depth_completion
   ${sensor_msgs_LIBRARIES}
   ${CUDA_LIBRARIES}
   ${TensorRT_LIBRARIES}
-  ${TORCH_LIBRARIES}
   ${NVINFER}
   ${NVINFER_PLUGIN}
   realsense2::realsense2
