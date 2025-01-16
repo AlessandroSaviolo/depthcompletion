@@ -18,7 +18,7 @@ This library is designed to be simple, efficient, and adaptable to real-world sc
 
 ## Installation
 
-Follow `install_dependencies.md` to install dependencies (PyTorch, TensorRT).
+Follow [`install_dependencies.md`](https://github.com/AlessandroSaviolo/depthcompletion/blob/main/install_dependencies.md) to install dependencies (PyTorch, TensorRT).
 
 ---
 
