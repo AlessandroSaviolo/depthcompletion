@@ -1,0 +1,3 @@
+[submodule "scripts/depth_anything_v2"]
+	path = scripts/depth_anything_v2
+	url = https://github.com/arplaboratory/depth_anything_v2

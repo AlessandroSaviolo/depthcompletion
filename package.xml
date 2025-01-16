@@ -1,0 +1,35 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>depthcompletion</name>
+  <version>0.0.1</version>
+  <description>Depth Completion using Monocular Depth Estimation and Depth Sensor Observations</description>
+  <maintainer email="alessandrosaviolo17@gmail.com">Alessandro Saviolo</maintainer>
+  <license>MIT</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <build_depend>rosidl_default_generators</build_depend>
+  <exec_depend>rosidl_default_runtime</exec_depend>
+  <member_of_group>rosidl_interface_packages</member_of_group>
+
+  <depend>rclcpp</depend>
+  <depend>geometry_msgs</depend>
+  <depend>nav_msgs</depend>
+  <depend>quadrotor_msgs</depend>
+  <depend>std_msgs</depend>
+  <depend>sensor_msgs</depend>
+  <depend>visualization_msgs</depend>
+  <depend>Eigen3</depend>
+  <depend>yaml-cpp</depend>
+  <depend>tf2</depend>
+  <depend>tf2_ros</depend>
+  <depend>rclcpp_components</depend>
+  <depend>cv_bridge</depend>
+  <depend>OpenCV</depend>
+  <depend>CUDA</depend>
+  <depend>TensorRT</depend>
+  <depend>realsense_camera</depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>
