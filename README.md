@@ -55,13 +55,24 @@ Source the workspace:
 source install/local_setup.bash
 ```
 
-### 3. Launch and Visualize
+### 3. Export PyTorch model to TensorRT format
+Run on your laptop:
+```
+cd ~/depthcompletion/scripts
+python export_onnx.py
+```
+Run on your embedded device:
+```
+python export_trt.py
+```
+
+### 4. Launch and Visualize
 Launch the ROS2 nodelet:
-```bash
+```
 ros2 launch depthcompletion depthcompletion.launch.py
 ```
 Visualize the output using `rqt_image_view`:
-```bash
+```
 ros2 run rqt_image_view rqt_image_view
 ```
 
