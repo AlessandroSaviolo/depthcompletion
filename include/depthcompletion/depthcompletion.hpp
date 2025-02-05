@@ -77,7 +77,7 @@ void DepthCompletionEngine::init(const std::string& engine_file_path, const int 
                      const int input_height, const int input_width, const int input_channels) {
 
     // Load engine file into memory
-    std::cout << "Loading engine from file: " << engine_file_path << std::endl;
+    std::cout << "[DepthCompletionEngine] Loading engine from file: " << engine_file_path << std::endl;
     std::ifstream file(engine_file_path, std::ios::binary);
     assert(file.good());
     
@@ -90,29 +90,29 @@ void DepthCompletionEngine::init(const std::string& engine_file_path, const int 
     file.read(trtModelStream, size);
     file.close();
 
-    std::cout << "Initializing TensorRT plugins..." << std::endl;
+    std::cout << "[DepthCompletionEngine] Initializing TensorRT plugins..." << std::endl;
     initLibNvInferPlugins(&_gLogger, "");
 
-    std::cout << "Creating TensorRT runtime..." << std::endl;
+    std::cout << "[DepthCompletionEngine] Creating TensorRT runtime..." << std::endl;
     _runtime = nvinfer1::createInferRuntime(_gLogger);
     assert(this->runtime != nullptr);
 
-    std::cout << "Deserializing CUDA engine..." << std::endl;
+    std::cout << "[DepthCompletionEngine] Deserializing CUDA engine..." << std::endl;
     _engine = _runtime->deserializeCudaEngine(trtModelStream, size, nullptr);
     assert(this->engine != nullptr);
 
     delete[] trtModelStream;
 
-    std::cout << "Creating execution context..." << std::endl;
+    std::cout << "[DepthCompletionEngine] Creating execution context..." << std::endl;
     _context = _engine->createExecutionContext();
     assert(this->context != nullptr);
 
-    std::cout << "Creating CUDA stream..." << std::endl;
+    std::cout << "[DepthCompletionEngine] Creating CUDA stream..." << std::endl;
     CHECK_CUDA(cudaStreamCreate(&_stream));
 
     // Process bindings
     _num_bindings = _engine->getNbBindings();
-    std::cout << "Number of bindings: " << _num_bindings << std::endl;
+    std::cout << "[DepthCompletionEngine] Number of bindings: " << _num_bindings << std::endl;
 
     for (int i = 0; i < _num_bindings; ++i) {
         Binding binding;
@@ -123,7 +123,7 @@ void DepthCompletionEngine::init(const std::string& engine_file_path, const int 
         binding.dsize = type_to_size(dtype);
 
         if (_engine->bindingIsInput(i)) {
-            std::cout << "Binding " << i << " is an input: " << name << std::endl;
+            std::cout << "[DepthCompletionEngine] Binding " << i << " is an input: " << name << std::endl;
             dims = _engine->getProfileDimensions(i, 0, nvinfer1::OptProfileSelector::kMAX);
             binding.size = get_size_by_dims(dims);
             binding.dims = dims;
@@ -131,31 +131,31 @@ void DepthCompletionEngine::init(const std::string& engine_file_path, const int 
             _num_inputs += 1;
             CHECK_BOOL(_context->setBindingDimensions(i, dims));
         } else {
-            std::cout << "Binding " << i << " is an output: " << name << std::endl;
+            std::cout << "[DepthCompletionEngine] Binding " << i << " is an output: " << name << std::endl;
             dims = _context->getBindingDimensions(i);
             binding.size = get_size_by_dims(dims);
             binding.dims = dims;
             _output_bindings.push_back(binding);
             _num_outputs += 1;
         }
-        std::cout << "Binding name: " << name << ", size: " << binding.size << ", dsize: " << binding.dsize << std::endl;
+        std::cout << "[DepthCompletionEngine] Binding name: " << name << ", size: " << binding.size << ", dsize: " << binding.dsize << std::endl;
     }
-    std::cout << "Initialization complete." << std::endl;
+    std::cout << "[DepthCompletionEngine] Initialization complete." << std::endl;
 
-    std::cout << "Allocating gpu memory..." << std::endl << std::flush;
+    std::cout << "[DepthCompletionEngine] Allocating gpu memory..." << std::endl << std::flush;
     for (auto& bindings : _input_bindings) {
         void* gpu_ptr;
         size_t size = bindings.size * bindings.dsize;
         CHECK_CUDA(cudaMalloc(&gpu_ptr, size));
         _gpu_ptrs.push_back(gpu_ptr);
-        std::cout << "Allocated input binding gpu memory: " << gpu_ptr << " of size: " << size << std::endl << std::flush;
+        std::cout << "[DepthCompletionEngine] Allocated input binding gpu memory: " << gpu_ptr << " of size: " << size << std::endl << std::flush;
     }
     for (auto& bindings : _output_bindings) {
         void *gpu_ptr;
         size_t size = bindings.size * bindings.dsize;
         CHECK_CUDA(cudaMalloc(&gpu_ptr, size));
         _gpu_ptrs.push_back(gpu_ptr);
-        std::cout << "Allocated output binding gpu memory: " << gpu_ptr << " of size: " << size << std::endl << std::flush;
+        std::cout << "[DepthCompletionEngine] Allocated output binding gpu memory: " << gpu_ptr << " of size: " << size << std::endl << std::flush;
     }
 
     // Set sizes
