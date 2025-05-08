@@ -14,7 +14,7 @@ namespace depthcompletion {
 class DepthCompletionNodelet : public rclcpp::Node {
 public:
     explicit DepthCompletionNodelet(const rclcpp::NodeOptions &options)
-        : Node("depth_completion", options), _clock(RCL_ROS_TIME) {
+        : Node("depth_completion", options), _clock(RCL_ROS_TIME), _epsilon(1e-3f) {
 
         // Initialize all components
         declareParameters();
@@ -162,7 +162,7 @@ private:
     cv::Mat completeDepth(cv::Mat color_image, cv::Mat depth_image) {
         // Sensor disparity
         cv::Mat disparity_image;
-        cv::divide(1.0f, depth_image + 1e-3f, disparity_image);
+        cv::divide(1.0f, depth_image + _epsilon, disparity_image);
 
         // Filter speckle noise
         cv::Mat depth_image_speckles;
@@ -173,9 +173,7 @@ private:
         cv::Mat pred_disparity = _mde_engine.predict(color_image);
 
         // Optimize the two clouds together to find the alignment factor
-        cv::Mat mask = (pred_disparity > 0.0f) & 
-                       (disparity_image < 1000.0f) & 
-                       (depth_image > _camera_min_range) & 
+        cv::Mat mask = (depth_image > _camera_min_range) & 
                        (depth_image < _camera_max_range) & 
                        (depth_image_speckles != -1);
         cv::Mat masked_pred_disparity, masked_disparity_image;
@@ -205,7 +203,7 @@ private:
 
         // Disparity to depth
         cv::Mat completed_depth;
-        cv::divide(1.0f, completed_disparity + 1e-3f, completed_depth);
+        cv::divide(1.0f, completed_disparity + _epsilon, completed_depth);
 
         return completed_depth;
     }
@@ -230,6 +228,9 @@ private:
         _pub_sparse_depth->publish(*sparse_depth_msg);
         _pub_completed_depth->publish(*completed_depth_msg);
     }
+
+    // Small constant
+    float _epsilon;
 
     // Node parameters
     std::string _ws_path;
