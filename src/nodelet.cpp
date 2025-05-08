@@ -124,7 +124,8 @@ private:
 
     void setupPublishers() {
         _pub_color = this->create_publisher<sensor_msgs::msg::Image>("camera/color/image_raw", 10);
-        _pub_depth = this->create_publisher<sensor_msgs::msg::Image>("camera/depth/image_raw", 10);
+        _pub_sparse_depth = this->create_publisher<sensor_msgs::msg::Image>("camera/depth/image_raw", 10);
+        _pub_completed_depth = this->create_publisher<sensor_msgs::msg::Image>("camera/depth/completed", 10);
     }
 
     void startTimer() {
@@ -155,7 +156,7 @@ private:
         cv::Mat completed_depth = completeDepth(color_image, depth_image);
 
         // Publish results
-        publishFrames(color_image, completed_depth);
+        publishFrames(color_image, depth_image, completed_depth);
     }
 
     cv::Mat completeDepth(cv::Mat color_image, cv::Mat depth_image) {
@@ -209,18 +210,25 @@ private:
         return completed_depth;
     }
 
-    void publishFrames(const cv::Mat &color_image, const cv::Mat &depth_image) {
-        auto color_msg = cv_bridge::CvImage(std_msgs::msg::Header(), "rgb8", color_image).toImageMsg();
-        auto depth_msg = cv_bridge::CvImage(std_msgs::msg::Header(), "32FC1", depth_image).toImageMsg();
+    void publishFrames(const cv::Mat &color_image, const cv::Mat &sparse_depth, const cv::Mat &completed_depth) {
 
         auto timestamp = _clock.now();
+
+        auto color_msg = cv_bridge::CvImage(std_msgs::msg::Header(), "rgb8", color_image).toImageMsg();
         color_msg->header.stamp = timestamp;
-        depth_msg->header.stamp = timestamp;
         color_msg->header.frame_id = _camera_frame_id;
-        depth_msg->header.frame_id = _camera_frame_id;
+
+        auto sparse_depth_msg = cv_bridge::CvImage(std_msgs::msg::Header(), "32FC1", sparse_depth).toImageMsg();
+        sparse_depth_msg->header.stamp = timestamp;
+        sparse_depth_msg->header.frame_id = _camera_frame_id;
+     
+        auto completed_depth_msg = cv_bridge::CvImage(std_msgs::msg::Header(), "32FC1", completed_depth).toImageMsg();
+        completed_depth_msg->header.stamp = timestamp;
+        completed_depth_msg->header.frame_id = _camera_frame_id;
 
         _pub_color->publish(*color_msg);
-        _pub_depth->publish(*depth_msg);
+        _pub_sparse_depth->publish(*sparse_depth_msg);
+        _pub_completed_depth->publish(*completed_depth_msg);
     }
 
     // Node parameters
@@ -250,7 +258,8 @@ private:
     rclcpp::Clock _clock;
     rclcpp::TimerBase::SharedPtr _timer;
     rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr _pub_color;
-    rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr _pub_depth;
+    rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr _pub_sparse_depth;
+    rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr _pub_completed_depth;
 };
 
 }  // namespace depthcompletion

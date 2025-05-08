@@ -24,7 +24,7 @@ def generate_launch_description():
         DeclareLaunchArgument('camera.channels',        default_value='3'),
         DeclareLaunchArgument('camera.fps',             default_value='60'),
         DeclareLaunchArgument('camera.min_range',       default_value='0.6'),
-        DeclareLaunchArgument('camera.max_range',       default_value='10.0'),
+        DeclareLaunchArgument('camera.max_range',       default_value='20.0'),
         DeclareLaunchArgument('camera.speckle_max_size',default_value='500'),
         DeclareLaunchArgument('camera.speckle_diff',    default_value='200')
     ]
