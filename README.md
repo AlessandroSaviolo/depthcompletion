@@ -132,7 +132,7 @@ If you use this library in your research or academic projects, please cite the f
 ```bibtex
 @article{saviolo2024reactive,
   title={Reactive Collision Avoidance for Safe Agile Navigation},
-  author={Saviolo, Alessandro and Picello, Niko and Verma, Rishabh and Loianno, Giuseppe},
+  author={Saviolo, Alessandro and Picello, Niko and Mao, Jeffrey and Verma, Rishabh and Loianno, Giuseppe},
   journal={arXiv preprint arXiv:2409.11962},
   year={2024}
 }
