@@ -14,7 +14,11 @@ namespace depthcompletion {
 class DepthCompletionNodelet : public rclcpp::Node {
 public:
     explicit DepthCompletionNodelet(const rclcpp::NodeOptions &options)
-        : Node("depth_completion", options), _clock(RCL_ROS_TIME), _epsilon(1e-3f) {
+        : Node("depth_completion", options), 
+          _clock(RCL_ROS_TIME), 
+          _epsilon(1e-3f), 
+          _running_factor_alpha(0.1f),
+          _running_factor_mean(cv::Mat::zeros(3, 1, CV_32F)) {
 
         // Initialize all components
         declareParameters();
@@ -195,11 +199,16 @@ private:
         cv::invert(XtX, XtX_inv, cv::DECOMP_SVD);
         cv::Mat factor = XtX_inv * X.t() * masked_disparity_image_flattened;
 
+        // If the factor is not all zeros, update the running mean
+        if (!cv::countNonZero(factor) == 0) {
+            _running_factor_mean = _running_factor_mean * (1.0f - _running_factor_alpha) + factor * _running_factor_alpha;
+        }
+
         cv::Mat pred_disparity_sq;
         cv::multiply(pred_disparity, pred_disparity, pred_disparity_sq);
-        cv::Mat completed_disparity = factor.at<float>(2, 0) * pred_disparity_sq + 
-                                      factor.at<float>(1, 0) * pred_disparity + 
-                                      factor.at<float>(0, 0);
+        cv::Mat completed_disparity = _running_factor_mean.at<float>(2, 0) * pred_disparity_sq + 
+                                      _running_factor_mean.at<float>(1, 0) * pred_disparity + 
+                                      _running_factor_mean.at<float>(0, 0);
 
         // Disparity to depth
         cv::Mat completed_depth;
@@ -231,6 +240,10 @@ private:
 
     // Small constant
     float _epsilon;
+    
+    // Running mean output from MDE optimizatio
+    cv::Mat _running_factor_mean;
+    float _running_factor_alpha;
 
     // Node parameters
     std::string _ws_path;
