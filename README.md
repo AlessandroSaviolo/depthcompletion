@@ -80,10 +80,13 @@ ros2 run rqt_image_view rqt_image_view
 
 ## Tested Environment
 This library has been tested in the following setup:
-- **Hardware:** NVIDIA Orin 16GB, Intel RealSense 455
-- **Librealsense Version:** v2.55.1
+- **Hardware:** NVIDIA Orin 16GB, Intel RealSense 435i / Intel RealSense 455
+- **Librealsense Version:** 2.55.1
 - **ROS2 Distribution:** Humble
-
+- **NVIDIA JetPack SDK:** 5.1.1
+- **CUDA:** 11.4
+- **Python:** 3.8.10
+- **PyTorch:** 2.0.0
 ---
 
 ## Contributing
