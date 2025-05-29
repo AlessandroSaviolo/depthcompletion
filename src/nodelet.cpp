@@ -4,10 +4,13 @@
 #include <opencv2/imgproc/imgproc.hpp>
 #include <opencv2/core/core.hpp>
 #include <cv_bridge/cv_bridge.h>
+#include <Eigen/Geometry>
 
 #include <rclcpp/rclcpp.hpp>
 #include <rclcpp_components/register_node_macro.hpp>
 #include <sensor_msgs/msg/image.hpp>
+#include <sensor_msgs/msg/point_cloud2.hpp>
+#include <sensor_msgs/point_cloud2_iterator.hpp>
 
 namespace depthcompletion {
 
@@ -129,7 +132,11 @@ private:
     void setupPublishers() {
         _pub_color = this->create_publisher<sensor_msgs::msg::Image>("camera/color/image_raw", 10);
         _pub_sparse_depth = this->create_publisher<sensor_msgs::msg::Image>("camera/depth/image_raw", 10);
+        _pub_relative_depth = this->create_publisher<sensor_msgs::msg::Image>("camera/depth/relative", 10);
         _pub_completed_depth = this->create_publisher<sensor_msgs::msg::Image>("camera/depth/completed", 10);
+        _pub_sparse_cloud = this->create_publisher<sensor_msgs::msg::PointCloud2>("camera/pointcloud/image_raw", 10);
+        _pub_relative_cloud = this->create_publisher<sensor_msgs::msg::PointCloud2>("camera/pointcloud/relative", 10);
+        _pub_completed_cloud = this->create_publisher<sensor_msgs::msg::PointCloud2>("camera/pointcloud/completed", 10);
     }
 
     void startTimer() {
@@ -157,13 +164,16 @@ private:
         depth_image.convertTo(depth_image, CV_32F, 1.0 / 1000.0);
 
         // Perform depth completion
-        cv::Mat completed_depth = completeDepth(color_image, depth_image);
+        cv::Mat relative_depth, completed_depth;
+        completeDepth(color_image, depth_image, relative_depth, completed_depth);
 
         // Publish results
-        publishFrames(color_image, depth_image, completed_depth);
+        publishFrames(color_image, depth_image, relative_depth, completed_depth);
     }
 
-    cv::Mat completeDepth(cv::Mat color_image, cv::Mat depth_image) {
+    void completeDepth(cv::Mat color_image, cv::Mat depth_image,
+                       cv::Mat& relative_depth, cv::Mat& completed_depth) {
+
         // Sensor disparity
         cv::Mat disparity_image;
         cv::divide(1.0f, depth_image + _epsilon, disparity_image);
@@ -211,13 +221,14 @@ private:
                                       _running_factor_mean.at<float>(0, 0);
 
         // Disparity to depth
-        cv::Mat completed_depth;
+        cv::divide(1.0f, pred_disparity + _epsilon, relative_depth);
         cv::divide(1.0f, completed_disparity + _epsilon, completed_depth);
 
-        return completed_depth;
+        return;
     }
 
-    void publishFrames(const cv::Mat &color_image, const cv::Mat &sparse_depth, const cv::Mat &completed_depth) {
+    void publishFrames(cv::Mat &color_image, cv::Mat &sparse_depth, 
+                       cv::Mat &relative_depth, cv::Mat &completed_depth) {
 
         auto timestamp = _clock.now();
 
@@ -229,13 +240,89 @@ private:
         sparse_depth_msg->header.stamp = timestamp;
         sparse_depth_msg->header.frame_id = _camera_frame_id;
      
+        auto relative_depth_msg = cv_bridge::CvImage(std_msgs::msg::Header(), "32FC1", relative_depth).toImageMsg();
+        relative_depth_msg->header.stamp = timestamp;
+        relative_depth_msg->header.frame_id = _camera_frame_id;
+     
         auto completed_depth_msg = cv_bridge::CvImage(std_msgs::msg::Header(), "32FC1", completed_depth).toImageMsg();
         completed_depth_msg->header.stamp = timestamp;
         completed_depth_msg->header.frame_id = _camera_frame_id;
 
         _pub_color->publish(*color_msg);
         _pub_sparse_depth->publish(*sparse_depth_msg);
+        _pub_relative_depth->publish(*relative_depth_msg);
         _pub_completed_depth->publish(*completed_depth_msg);
+
+        Eigen::MatrixXf sparse_cloud = depthToPointCloud(sparse_depth);
+        sensor_msgs::msg::PointCloud2 sparse_cloud_msg = getCloudMsg(sparse_cloud);
+        _pub_sparse_cloud->publish(sparse_cloud_msg);
+
+        Eigen::MatrixXf relative_cloud = depthToPointCloud(relative_depth);
+        sensor_msgs::msg::PointCloud2 relative_cloud_msg = getCloudMsg(relative_cloud);
+        _pub_relative_cloud->publish(relative_cloud_msg);
+
+        Eigen::MatrixXf completed_cloud = depthToPointCloud(completed_depth);
+        sensor_msgs::msg::PointCloud2 completed_cloud_msg = getCloudMsg(completed_cloud);
+        _pub_completed_cloud->publish(completed_cloud_msg);
+    }
+
+    Eigen::MatrixXf depthToPointCloud(const cv::Mat& depth) {
+        std::vector<Eigen::Vector3f> points;
+        for (int v = 0; v < depth.rows; ++v) {
+            for (int u = 0; u < depth.cols; ++u) {
+                float z = depth.at<float>(v, u);
+                if (std::isfinite(z) && z > 0.1f) {
+                    float x = (u - _camera_cx) * z / _camera_fx;
+                    float y = (v - _camera_cy) * z / _camera_fy;
+                    points.emplace_back(x, y, z);
+                }
+            }
+        }
+
+        Eigen::MatrixXf cloud(3, points.size());
+        for (size_t i = 0; i < points.size(); ++i) {
+            cloud.col(i) = points[i];
+        }
+        return cloud;
+    }
+
+    sensor_msgs::msg::PointCloud2 getCloudMsg(
+        const Eigen::MatrixXf& point_cloud) {
+            
+        sensor_msgs::msg::PointCloud2 cloud_msg;
+        cloud_msg.header.stamp = _clock.now();
+        cloud_msg.header.frame_id = "cam1_link";
+        cloud_msg.width = point_cloud.cols();
+        cloud_msg.height = 1;
+        cloud_msg.is_dense = true;
+        cloud_msg.is_bigendian = false;
+        cloud_msg.fields.resize(3);
+        cloud_msg.fields[0].name = "x";
+        cloud_msg.fields[1].name = "y";
+        cloud_msg.fields[2].name = "z";
+
+        int offset = 0;
+        for (size_t i = 0; i < cloud_msg.fields.size(); ++i, offset += 4) {
+            cloud_msg.fields[i].offset = offset;
+            cloud_msg.fields[i].datatype = sensor_msgs::msg::PointField::FLOAT32;
+            cloud_msg.fields[i].count = 1;
+        }
+        cloud_msg.point_step = offset; // Length of a point in bytes
+
+        // Calculate the row_step
+        cloud_msg.row_step = cloud_msg.point_step * cloud_msg.width;
+
+        // Resize data to fit all points
+        cloud_msg.data.resize(cloud_msg.row_step * cloud_msg.height);
+
+        // Fill in the point cloud data
+        float* data_ptr = reinterpret_cast<float*>(cloud_msg.data.data());
+        for (int i = 0; i < point_cloud.cols(); ++i) {
+            data_ptr[3 * i]     = point_cloud(0, i);
+            data_ptr[3 * i + 1] = point_cloud(1, i);
+            data_ptr[3 * i + 2] = point_cloud(2, i);
+        }
+        return cloud_msg;
     }
 
     // Small constant
@@ -273,7 +360,11 @@ private:
     rclcpp::TimerBase::SharedPtr _timer;
     rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr _pub_color;
     rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr _pub_sparse_depth;
+    rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr _pub_relative_depth;
     rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr _pub_completed_depth;
+    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr _pub_sparse_cloud;
+    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr _pub_relative_cloud;
+    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr _pub_completed_cloud;
 };
 
 }  // namespace depthcompletion
