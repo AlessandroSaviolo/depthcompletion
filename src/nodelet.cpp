@@ -49,6 +49,7 @@ private:
         this->declare_parameter<double>("camera.max_range", 0.0f);
         this->declare_parameter<int>("camera.speckle_max_size", 0);
         this->declare_parameter<int>("camera.speckle_diff", 0);
+        this->declare_parameter<std::string>("camera.serial_number", "");
     }
 
     void validateAndLoadParameters() {
@@ -80,6 +81,7 @@ private:
         loadValidatedParameter("camera.max_range", _camera_max_range, 0.0f);
         loadValidatedParameter("camera.speckle_max_size", _speckle_max_size, 0);
         loadValidatedParameter("camera.speckle_diff", _speckle_diff, 0);
+        loadValidatedParameter("camera.serial_number", _camera_serial_number);
     }
 
     template <typename T>
@@ -109,12 +111,14 @@ private:
 
     void initializeCamera() {
         try {
-            _camera.init(_ws_path, _camera_width, _camera_height, _camera_fps);
+            std::vector<std::string> serial_numbers{_camera_serial_number};
+            _camera.init(_ws_path, _camera_width, _camera_height, _camera_fps, serial_numbers);
             
             // Fetch camera parameters
             float camera_norm_width, camera_norm_height, camera_norm_fx, camera_norm_fy, camera_norm_cx, camera_norm_cy;
             _camera.getNormalizedParameters(
-                camera_norm_width, camera_norm_height, camera_norm_fx, camera_norm_fy, camera_norm_cx, camera_norm_cy);
+                _camera_serial_number, camera_norm_width, camera_norm_height, 
+                camera_norm_fx, camera_norm_fy, camera_norm_cx, camera_norm_cy);
 
             _camera_fx = camera_norm_fx * _camera_width;
             _camera_fy = camera_norm_fy * _camera_height;
@@ -150,7 +154,7 @@ private:
         cv::Mat color_image, depth_image;
 
         // Capture frames
-        if (!_camera.grabFrames(color_image, depth_image, timestamp)) {
+        if (!_camera.grabFrames(_camera_serial_number, color_image, depth_image, timestamp)) {
             RCLCPP_WARN_THROTTLE(this->get_logger(), _clock, 1000,
                 "Dropped frame due to camera capture timeout.");
             return;
@@ -347,6 +351,7 @@ private:
     float _camera_max_range;
     int _speckle_max_size;
     int _speckle_diff;
+    std::string _camera_serial_number;
 
     // Engine and camera instances
     DepthCompletionEngine _mde_engine;
