@@ -1,0 +1,18 @@
+/**:
+  ros__parameters:
+    name: "quadrotor"
+    engine:
+      width: 322
+      height: 238
+      batchsize: 1
+    camera:
+      frame_id: "camera_link"
+      serial_number: ["241122303290"]
+      width: 640
+      height: 480
+      channels: 3
+      fps: 60
+      min_range: 0.6
+      max_range: 10.0
+      speckle_max_size: 500
+      speckle_diff: 200
